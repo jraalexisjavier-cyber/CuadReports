@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard CDR</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Dashboard CDR</h1>
+            <p class="subtitle">Análisis de Llamadas en Tiempo Real</p>
+        </div>
+
+        <div class="upload-section" id="uploadSection">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">Arrastra tu archivo JSON aquí</div>
+                <div class="upload-hint">o haz clic para seleccionar el archivo</div>
+                <input type="file" id="fileInput" accept=".json">
+            </div>
+            <div class="file-info hidden" id="fileInfo"></div>
+        </div>
+
+        <div id="dashboardContent" class="hidden">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Llamadas</div>
+                    <div class="stat-value" id="totalCalls">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Llamadas Contestadas</div>
+                    <div class="stat-value" id="answeredCalls">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Duración Total (min)</div>
+                    <div class="stat-value" id="totalDuration">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Promedio Duración</div>
+                    <div class="stat-value" id="avgDuration">0s</div>
+                </div>
+            </div>
+
+            <div class="filters">
+                <h3 style="color: #333; margin-bottom: 15px;">🔍 Filtros</h3>
+                <div class="filter-group">
+                    <div class="filter-item">
+                        <label>Estado</label>
+                        <select id="filterDisposition">
+                            <option value="">Todos</option>
+                            <option value="ANSWERED">Contestadas</option>
+                            <option value="NO ANSWER">No Contestadas</option>
+                            <option value="FAILED">Fallidas</option>
+                            <option value="BUSY">Ocupado</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Extensión Destino</label>
+                        <div class="multiselect-wrapper">
+                            <div class="multiselect-display" id="multiselectDisplay">
+                                <span class="multiselect-placeholder">Seleccionar extensiones...</span>
+                            </div>
+                            <div class="multiselect-dropdown hidden" id="multiselectDropdown">
+                                <div class="multiselect-search">
+                                    <input type="text" id="extensionSearch" placeholder="Buscar extensión...">
+                                </div>
+                                <div class="multiselect-options" id="multiselectOptions">
+                                    <!-- Las opciones se generarán dinámicamente -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="filter-item">
+                        <label>Número Origen</label>
+                        <input type="text" id="filterSrc" placeholder="Buscar número...">
+                    </div>
+                    <div class="filter-item">
+                        <label>Duración Mínima (seg)</label>
+                        <input type="number" id="filterDuration" placeholder="0">
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-card chart-full-width">
+                <div class="chart-title">Llamadas por Hora del Día</div>
+                <canvas id="hourChart"></canvas>
+            </div>
+
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-title">Distribución por Estado</div>
+                    <canvas id="dispositionChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Llamadas por Extensión</div>
+                    <canvas id="extensionChart"></canvas>
+                </div>
+            </div>
+
+            
+
+            <div class="table-container">
+                <h3 style="color: #333; margin-bottom: 20px;">📋 Detalle de Llamadas</h3>
+                <table id="callsTable">
+                    <thead>
+                        <tr>
+                            <th>Fecha/Hora</th>
+                            <th>Origen</th>
+                            <th>Destino</th>
+                            <th>Estado</th>
+                            <th>Duración</th>
+                            <th>Facturado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
