@@ -16,7 +16,7 @@ let sessionData = {
 };
 
 // URL de la API (cambiar según tu configuración)
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'http://192.168.2.243:3000/api';
 
 // Elementos del DOM
 const uploadArea = document.getElementById('uploadArea');
@@ -1423,4 +1423,5 @@ async function consultaTelmexRefresh(fromDate, toDate, source = '', destination 
     } catch (error) {
         throw new Error('Error al refrescar datos: ' + error.message);
     }
+
 }
