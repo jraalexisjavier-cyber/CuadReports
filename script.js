@@ -4,7 +4,19 @@ let filteredCalls = [];
 let dispositionChart = null;
 let extensionChart = null;
 let hourChart = null;
+let topSourceChart = null;
+let avgDurationChart = null;
+let weekdayChart = null;
 let selectedExtensions = [];
+let sessionData = {
+    userid: '',
+    userpass: '',
+    sessionId: '',
+    isActive: false
+};
+
+// URL de la API (cambiar según tu configuración)
+const API_URL = 'http://localhost:3000/api';
 
 // Elementos del DOM
 const uploadArea = document.getElementById('uploadArea');
@@ -17,6 +29,11 @@ const dashboardContent = document.getElementById('dashboardContent');
 function init() {
     setupUploadEvents();
     setupFilterEvents();
+    setupCredentialsForm();
+    setupCustomQueryForm();
+    setupQuickQueryPanel();
+    setupDashboardControls();
+    setDefaultCustomDates();
 }
 
 // Configurar eventos de carga de archivos
@@ -89,6 +106,12 @@ function loadData(data) {
     // Mostrar dashboard
     uploadSection.classList.add('hidden');
     dashboardContent.classList.remove('hidden');
+
+    // Actualizar información de usuario y registros
+    if (sessionData.userid) {
+        document.getElementById('dashboardUser').textContent = sessionData.userid;
+    }
+    document.getElementById('recordsCount').textContent = `${allCalls.length} registros`;
 
     // Poblar filtro de extensiones
     populateDestinationFilter();
@@ -221,6 +244,7 @@ function updateCharts() {
     updateDispositionChart();
     updateExtensionChart();
     updateHourChart();
+    updateAdvancedAnalytics();
 }
 
 // Actualizar gráfico de disposición
@@ -435,7 +459,7 @@ function updateTable() {
     const tbody = document.getElementById('tableBody');
     tbody.innerHTML = '';
 
-    const maxRows = 1000;
+    const maxRows = 100;
     filteredCalls.slice(0, maxRows).forEach(call => {
         const tr = document.createElement('tr');
         
@@ -480,5 +504,923 @@ function getDispositionClass(disposition) {
     return classes[disposition] || 'badge-info';
 }
 
+// ============================================
+// ANALÍTICAS AVANZADAS
+// ============================================
+
+function updateAdvancedAnalytics() {
+    // Solo actualizar si hay datos
+    if (filteredCalls.length === 0) {
+        console.log('No hay datos para analíticas avanzadas');
+        return;
+    }
+    
+    try {
+        updateSuccessRates();
+        updateTopSourceChart();
+        updateAvgDurationChart();
+        updateWeekdayChart();
+        updateHeatmap();
+        updateTopDestinationsTable();
+        updateKPIs();
+    } catch (error) {
+        console.error('Error al actualizar analíticas avanzadas:', error);
+    }
+}
+
+// Tasa de éxito
+function updateSuccessRates() {
+    const total = filteredCalls.length;
+    if (total === 0) return;
+    
+    const answered = filteredCalls.filter(c => c.disposition === 'ANSWERED').length;
+    const noAnswer = filteredCalls.filter(c => c.disposition === 'NO ANSWER').length;
+    const failed = filteredCalls.filter(c => c.disposition === 'FAILED').length;
+    
+    const successRate = ((answered / total) * 100).toFixed(1);
+    const answeredRate = ((answered / total) * 100).toFixed(1);
+    const noAnswerRate = ((noAnswer / total) * 100).toFixed(1);
+    const failedRate = ((failed / total) * 100).toFixed(1);
+    
+    document.getElementById('successRate').textContent = successRate + '%';
+    document.getElementById('answeredRate').textContent = answeredRate + '%';
+    document.getElementById('noAnswerRate').textContent = noAnswerRate + '%';
+    document.getElementById('failedRate').textContent = failedRate + '%';
+}
+
+// Top números origen
+function updateTopSourceChart() {
+    const sourceCounts = {};
+    filteredCalls.forEach(call => {
+        if (call.src) {
+            sourceCounts[call.src] = (sourceCounts[call.src] || 0) + 1;
+        }
+    });
+    
+    const topSources = Object.entries(sourceCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+    
+    // Si no hay datos, mostrar mensaje
+    if (topSources.length === 0) {
+        console.log('No hay datos de origen para mostrar');
+        return;
+    }
+    
+    if (topSourceChart) topSourceChart.destroy();
+    
+    const ctx = document.getElementById('topSourceChart');
+    if (!ctx) {
+        console.error('Canvas topSourceChart no encontrado');
+        return;
+    }
+    
+    topSourceChart = new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: topSources.map(s => s[0]),
+            datasets: [{
+                label: 'Llamadas',
+                data: topSources.map(s => s[1]),
+                backgroundColor: '#764ba2',
+                borderRadius: 5
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: { 
+                    beginAtZero: true,
+                    ticks: { precision: 0 }
+                }
+            }
+        }
+    });
+}
+
+// Duración promedio por hora
+function updateAvgDurationChart() {
+    const hourData = Array(24).fill(0);
+    const hourCounts = Array(24).fill(0);
+    
+    filteredCalls.forEach(call => {
+        if (call.calldate && call.billsec) {
+            const timeMatch = call.calldate.match(/(\d{1,2}):(\d{2})/);
+            if (timeMatch) {
+                const hour = parseInt(timeMatch[1]);
+                hourData[hour] += parseInt(call.billsec || 0);
+                hourCounts[hour]++;
+            }
+        }
+    });
+    
+    const avgData = hourData.map((total, i) => 
+        hourCounts[i] > 0 ? Math.round(total / hourCounts[i]) : 0
+    );
+    
+    if (avgDurationChart) avgDurationChart.destroy();
+    
+    const ctx = document.getElementById('avgDurationChart');
+    if (!ctx) {
+        console.error('Canvas avgDurationChart no encontrado');
+        return;
+    }
+    
+    avgDurationChart = new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+            datasets: [{
+                label: 'Duración Promedio (seg)',
+                data: avgData,
+                backgroundColor: '#ff9800',
+                borderRadius: 5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { 
+                    beginAtZero: true,
+                    ticks: { 
+                        callback: (value) => value + 's'
+                    }
+                },
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Llamadas por día de semana
+function updateWeekdayChart() {
+    const weekdays = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const weekdayCounts = Array(7).fill(0);
+    
+    filteredCalls.forEach(call => {
+        if (call.calldate) {
+            // Parsear fecha en formato "31/10/25, 16:39"
+            const dateMatch = call.calldate.match(/(\d{2})\/(\d{2})\/(\d{2})/);
+            if (dateMatch) {
+                const day = parseInt(dateMatch[1]);
+                const month = parseInt(dateMatch[2]) - 1;
+                const year = 2000 + parseInt(dateMatch[3]);
+                const date = new Date(year, month, day);
+                weekdayCounts[date.getDay()]++;
+            }
+        }
+    });
+    
+    if (weekdayChart) weekdayChart.destroy();
+    
+    const ctx = document.getElementById('weekdayChart');
+    if (!ctx) {
+        console.error('Canvas weekdayChart no encontrado');
+        return;
+    }
+    
+    weekdayChart = new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: weekdays,
+            datasets: [{
+                label: 'Llamadas',
+                data: weekdayCounts,
+                backgroundColor: [
+                    '#f44336', '#2196f3', '#4caf50', '#ff9800', 
+                    '#9c27b0', '#00bcd4', '#ffeb3b'
+                ],
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { 
+                    beginAtZero: true,
+                    ticks: { precision: 0 }
+                }
+            }
+        }
+    });
+}
+
+// Mapa de calor
+function updateHeatmap() {
+    const weekdays = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    const heatmapData = Array(7).fill(null).map(() => Array(24).fill(0));
+    
+    filteredCalls.forEach(call => {
+        if (call.calldate) {
+            const dateMatch = call.calldate.match(/(\d{2})\/(\d{2})\/(\d{2}), (\d{1,2}):/);
+            if (dateMatch) {
+                const day = parseInt(dateMatch[1]);
+                const month = parseInt(dateMatch[2]) - 1;
+                const year = 2000 + parseInt(dateMatch[3]);
+                const hour = parseInt(dateMatch[4]);
+                const date = new Date(year, month, day);
+                const weekday = date.getDay();
+                heatmapData[weekday][hour]++;
+            }
+        }
+    });
+    
+    const maxValue = Math.max(...heatmapData.flat());
+    
+    const container = document.getElementById('heatmapContainer');
+    
+    // Crear encabezado de horas
+    let html = '<div class="heatmap-header"><div></div>';
+    for (let h = 0; h < 24; h++) {
+        html += `<div class="heatmap-hour">${h}</div>`;
+    }
+    html += '</div>';
+    
+    // Crear filas
+    html += '<div class="heatmap">';
+    for (let d = 0; d < 7; d++) {
+        html += '<div class="heatmap-row">';
+        html += `<div class="heatmap-label">${weekdays[d]}</div>`;
+        for (let h = 0; h < 24; h++) {
+            const value = heatmapData[d][h];
+            const intensity = maxValue > 0 ? value / maxValue : 0;
+            const color = getHeatmapColor(intensity);
+            const displayValue = value > 0 ? value : '';
+            html += `<div class="heatmap-cell" style="background: ${color}" title="${weekdays[d]} ${h}:00 - ${value} llamadas">${displayValue}</div>`;
+        }
+        html += '</div>';
+    }
+    html += '</div>';
+    
+    // Leyenda
+    html += '<div class="heatmap-legend">';
+    html += '<span>Menos</span>';
+    for (let i = 0; i <= 5; i++) {
+        const color = getHeatmapColor(i / 5);
+        html += `<div class="legend-item"><div class="legend-color" style="background: ${color}"></div></div>`;
+    }
+    html += '<span>Más</span>';
+    html += '</div>';
+    
+    container.innerHTML = html;
+}
+
+function getHeatmapColor(intensity) {
+    if (intensity === 0) return '#f5f5f5';
+    const colors = [
+        '#e3f2fd',
+        '#90caf9',
+        '#42a5f5',
+        '#1e88e5',
+        '#1565c0',
+        '#0d47a1'
+    ];
+    const index = Math.min(Math.floor(intensity * colors.length), colors.length - 1);
+    return colors[index];
+}
+
+// Tabla de top destinos
+function updateTopDestinationsTable() {
+    const destStats = {};
+    
+    filteredCalls.forEach(call => {
+        const dest = call.destination || call.dst;
+        if (!dest) return;
+        
+        if (!destStats[dest]) {
+            destStats[dest] = {
+                total: 0,
+                answered: 0,
+                noAnswer: 0,
+                failed: 0,
+                duration: 0
+            };
+        }
+        
+        destStats[dest].total++;
+        destStats[dest].duration += parseInt(call.billsec || 0);
+        
+        if (call.disposition === 'ANSWERED') destStats[dest].answered++;
+        else if (call.disposition === 'NO ANSWER') destStats[dest].noAnswer++;
+        else if (call.disposition === 'FAILED') destStats[dest].failed++;
+    });
+    
+    const sorted = Object.entries(destStats)
+        .sort((a, b) => b[1].total - a[1].total)
+        .slice(0, 10);
+    
+    const tbody = document.getElementById('topDestinationsBody');
+    tbody.innerHTML = '';
+    
+    sorted.forEach(([dest, stats]) => {
+        const avgDuration = stats.answered > 0 ? Math.round(stats.duration / stats.answered) : 0;
+        const successRate = ((stats.answered / stats.total) * 100).toFixed(1);
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><strong>Ext. ${dest}</strong></td>
+            <td>${stats.total}</td>
+            <td><span class="badge badge-success">${stats.answered}</span></td>
+            <td><span class="badge badge-warning">${stats.noAnswer}</span></td>
+            <td><span class="badge badge-danger">${stats.failed}</span></td>
+            <td>${Math.floor(stats.duration / 60)}m ${stats.duration % 60}s</td>
+            <td>${avgDuration}s</td>
+            <td>
+                ${successRate}%
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${successRate}%"></div>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// KPIs adicionales
+function updateKPIs() {
+    // Duración promedio
+    const answeredCalls = filteredCalls.filter(c => c.disposition === 'ANSWERED');
+    const totalDuration = answeredCalls.reduce((sum, c) => sum + parseInt(c.billsec || 0), 0);
+    const avgDuration = answeredCalls.length > 0 ? Math.round(totalDuration / answeredCalls.length) : 0;
+    document.getElementById('avgCallDuration').textContent = avgDuration + 's';
+    
+    // Hora pico
+    const hourCounts = Array(24).fill(0);
+    filteredCalls.forEach(call => {
+        if (call.calldate) {
+            const timeMatch = call.calldate.match(/(\d{1,2}):(\d{2})/);
+            if (timeMatch) {
+                hourCounts[parseInt(timeMatch[1])]++;
+            }
+        }
+    });
+    const peakHourIndex = hourCounts.indexOf(Math.max(...hourCounts));
+    document.getElementById('peakHour').textContent = `${peakHourIndex}:00`;
+    
+    // Extensión más ocupada
+    const destCounts = {};
+    filteredCalls.forEach(call => {
+        const dest = call.destination || call.dst;
+        if (dest) destCounts[dest] = (destCounts[dest] || 0) + 1;
+    });
+    const busiest = Object.entries(destCounts).sort((a, b) => b[1] - a[1])[0];
+    document.getElementById('busyExtension').textContent = busiest ? `Ext. ${busiest[0]}` : '-';
+    
+    // Tiempo de espera promedio (ring time)
+    const totalRingTime = filteredCalls.reduce((sum, c) => {
+        const duration = parseInt(c.duration || 0);
+        const billsec = parseInt(c.billsec || 0);
+        return sum + (duration - billsec);
+    }, 0);
+    const avgWaitTime = filteredCalls.length > 0 ? Math.round(totalRingTime / filteredCalls.length) : 0;
+    document.getElementById('avgWaitTime').textContent = avgWaitTime + 's';
+}
+
 // Inicializar la aplicación cuando el DOM esté listo
 document.addEventListener('DOMContentLoaded', init);
+
+// ============================================
+// INTEGRACIÓN CON CUAD TELMEX
+// ============================================
+
+// Obtener primer y último día del mes actual
+function getCurrentMonthDates() {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    
+    return {
+        from: formatDateForCUAD(firstDay),
+        to: formatDateForCUAD(lastDay),
+        fromInput: formatDateForInput(firstDay),
+        toInput: formatDateForInput(lastDay)
+    };
+}
+
+// Formatear fecha para CUAD (YYYY-MM-DD HH:mm)
+function formatDateForCUAD(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
+// Formatear fecha para input datetime-local
+function formatDateForInput(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+// Establecer fechas por defecto en formulario personalizado
+function setDefaultCustomDates() {
+    const dates = getCurrentMonthDates();
+    document.getElementById('customFromDate').value = dates.fromInput;
+    document.getElementById('customToDate').value = dates.toInput;
+}
+
+// Configurar formulario de credenciales (login inicial)
+function setupCredentialsForm() {
+    const form = document.getElementById('credentialsForm');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await iniciarSesionYCargarDatos();
+    });
+    
+    // Botón de logout
+    document.getElementById('logoutBtn').addEventListener('click', cerrarSesion);
+}
+
+// Configurar formulario de consulta personalizada
+function setupCustomQueryForm() {
+    const form = document.getElementById('customQueryForm');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await consultarConParametrosPersonalizados();
+        });
+    }
+}
+
+// Configurar controles del dashboard
+function setupDashboardControls() {
+    // Botón nueva consulta
+    document.getElementById('btnNewQuery').addEventListener('click', () => {
+        const panel = document.getElementById('quickQueryPanel');
+        panel.classList.remove('hidden');
+        setDefaultQuickDates();
+    });
+    
+    // Botón cerrar panel
+    document.getElementById('btnCloseQuery').addEventListener('click', () => {
+        document.getElementById('quickQueryPanel').classList.add('hidden');
+    });
+    
+    // Botón logout del dashboard
+    document.getElementById('btnLogout').addEventListener('click', cerrarSesion);
+}
+
+// Configurar panel de consulta rápida
+function setupQuickQueryPanel() {
+    const form = document.getElementById('quickQueryForm');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await ejecutarConsultaRapida();
+    });
+    
+    // Atajos de fecha
+    document.querySelectorAll('.btn-shortcut').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const range = e.target.dataset.range;
+            aplicarRangoFecha(range);
+            
+            // Efecto visual
+            document.querySelectorAll('.btn-shortcut').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+        });
+    });
+}
+
+// Establecer fechas por defecto para consulta rápida
+function setDefaultQuickDates() {
+    const dates = getCurrentMonthDates();
+    document.getElementById('quickFromDate').value = dates.fromInput;
+    document.getElementById('quickToDate').value = dates.toInput;
+}
+
+// Aplicar rangos de fecha predefinidos
+function aplicarRangoFecha(range) {
+    const now = new Date();
+    let from, to;
+    
+    switch(range) {
+        case 'today':
+            from = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0);
+            to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59);
+            break;
+            
+        case 'yesterday':
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            from = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 0, 0);
+            to = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59);
+            break;
+            
+        case 'week':
+            const dayOfWeek = now.getDay();
+            const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+            from = new Date(now.getFullYear(), now.getMonth(), diff, 0, 0);
+            to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59);
+            break;
+            
+        case 'month':
+            from = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0);
+            to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59);
+            break;
+            
+        case 'last7':
+            from = new Date(now);
+            from.setDate(from.getDate() - 7);
+            from.setHours(0, 0, 0);
+            to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59);
+            break;
+            
+        case 'last30':
+            from = new Date(now);
+            from.setDate(from.getDate() - 30);
+            from.setHours(0, 0, 0);
+            to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59);
+            break;
+            
+        default:
+            from = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0);
+            to = now;
+    }
+    
+    document.getElementById('quickFromDate').value = formatDateForInput(from);
+    document.getElementById('quickToDate').value = formatDateForInput(to);
+}
+
+// Ejecutar consulta rápida
+async function ejecutarConsultaRapida() {
+    if (!sessionData.isActive) {
+        showQuickAlert('❌ Error: No hay sesión activa', 'error');
+        return;
+    }
+    
+    const queryBtn = document.getElementById('quickQueryBtn');
+    const queryBtnText = document.getElementById('quickQueryBtnText');
+    const queryBtnLoader = document.getElementById('quickQueryBtnLoader');
+    
+    const fromDate = document.getElementById('quickFromDate').value.replace('T', ' ');
+    const toDate = document.getElementById('quickToDate').value.replace('T', ' ');
+    const source = document.getElementById('quickSource').value;
+    const destination = document.getElementById('quickDestination').value;
+    
+    queryBtn.disabled = true;
+    queryBtnText.classList.add('hidden');
+    queryBtnLoader.classList.remove('hidden');
+    
+    try {
+        showQuickAlert(`🔄 Consultando: ${fromDate} - ${toDate}...`, 'info');
+        
+        // Siempre usar las credenciales guardadas para nueva consulta
+        const result = await consultaTelmex(
+            sessionData.userid,
+            sessionData.userpass,
+            fromDate,
+            toDate,
+            source,
+            destination
+        );
+        
+        if (result.data && result.data.rows) {
+            showQuickAlert(`✓ Consulta exitosa: ${result.data.count} registros encontrados`, 'success');
+            
+            const formattedData = formatCUADData(result.data);
+            loadData(formattedData);
+            
+            // Cerrar panel después de 2 segundos
+            setTimeout(() => {
+                document.getElementById('quickQueryPanel').classList.add('hidden');
+            }, 2000);
+        } else {
+            throw new Error('No se recibieron datos del servidor');
+        }
+        
+    } catch (error) {
+        console.error('Error en consulta rápida:', error);
+        showQuickAlert('❌ Error: ' + error.message, 'error');
+    } finally {
+        queryBtn.disabled = false;
+        queryBtnText.classList.remove('hidden');
+        queryBtnLoader.classList.add('hidden');
+    }
+}
+
+// Mostrar alertas en panel rápido
+function showQuickAlert(message, type) {
+    const alertMsg = document.getElementById('quickAlertMsg');
+    alertMsg.textContent = message;
+    alertMsg.className = `alert ${type}`;
+    alertMsg.classList.remove('hidden');
+}
+
+// Iniciar sesión y cargar datos del mes actual
+async function iniciarSesionYCargarDatos() {
+    const loginBtn = document.getElementById('loginBtn');
+    const loginBtnText = document.getElementById('loginBtnText');
+    const loginBtnLoader = document.getElementById('loginBtnLoader');
+    const alertMsg = document.getElementById('alertMsg');
+    
+    const userid = document.getElementById('userid').value;
+    const userpass = document.getElementById('userpass').value;
+    
+    // Guardar credenciales en sesión (necesarias para consultas posteriores)
+    sessionData.userid = userid;
+    sessionData.userpass = userpass;
+    
+    // Deshabilitar botón
+    loginBtn.disabled = true;
+    loginBtnText.classList.add('hidden');
+    loginBtnLoader.classList.remove('hidden');
+    
+    try {
+        showAlert('🔐 Iniciando sesión en CUAD Telmex...', 'info');
+        
+        // Obtener fechas del mes actual
+        const dates = getCurrentMonthDates();
+        
+        showAlert(`📊 Consultando CDR desde ${dates.from} hasta ${dates.to}...`, 'info');
+        
+        const result = await consultaTelmex(userid, userpass, dates.from, dates.to, '', '');
+        
+        if (result.data && result.data.rows) {
+            sessionData.isActive = true;
+            
+            showAlert(`✓ Consulta exitosa: ${result.data.count} registros encontrados`, 'success');
+            
+            // Actualizar UI
+            document.getElementById('sessionUser').textContent = userid;
+            document.getElementById('step1').classList.add('hidden');
+            document.getElementById('step2').classList.remove('hidden');
+            
+            // Cargar datos en el dashboard
+            const formattedData = formatCUADData(result.data);
+            loadData(formattedData);
+        } else {
+            throw new Error('No se recibieron datos del servidor');
+        }
+        
+    } catch (error) {
+        console.error('Error en inicio de sesión:', error);
+        showAlert('❌ Error: ' + error.message, 'error');
+        sessionData.isActive = false;
+    } finally {
+        loginBtn.disabled = false;
+        loginBtnText.classList.remove('hidden');
+        loginBtnLoader.classList.add('hidden');
+    }
+}
+
+// Consultar con parámetros personalizados
+async function consultarConParametrosPersonalizados() {
+    if (!sessionData.isActive) {
+        showAlert('❌ Error: No hay sesión activa', 'error');
+        return;
+    }
+    
+    const queryBtn = document.getElementById('queryBtn');
+    const queryBtnText = document.getElementById('queryBtnText');
+    const queryBtnLoader = document.getElementById('queryBtnLoader');
+    
+    const fromDate = document.getElementById('customFromDate').value.replace('T', ' ');
+    const toDate = document.getElementById('customToDate').value.replace('T', ' ');
+    const source = document.getElementById('customSource').value;
+    const destination = document.getElementById('customDestination').value;
+    
+    queryBtn.disabled = true;
+    queryBtnText.classList.add('hidden');
+    queryBtnLoader.classList.remove('hidden');
+    
+    try {
+        showAlert(`🔄 Actualizando consulta: ${fromDate} - ${toDate}...`, 'info');
+        
+        // Usar credenciales guardadas para nueva consulta
+        const result = await consultaTelmex(
+            sessionData.userid,
+            sessionData.userpass,
+            fromDate,
+            toDate,
+            source,
+            destination
+        );
+        
+        if (result.data && result.data.rows) {
+            showAlert(`✓ Consulta actualizada: ${result.data.count} registros encontrados`, 'success');
+            
+            const formattedData = formatCUADData(result.data);
+            loadData(formattedData);
+        } else {
+            throw new Error('No se recibieron datos del servidor');
+        }
+        
+    } catch (error) {
+        console.error('Error en consulta:', error);
+        showAlert('❌ Error: ' + error.message, 'error');
+    } finally {
+        queryBtn.disabled = false;
+        queryBtnText.classList.remove('hidden');
+        queryBtnLoader.classList.add('hidden');
+    }
+}
+
+// Cerrar sesión
+async function cerrarSesion() {
+    // Notificar al backend
+    if (sessionData.sessionId) {
+        try {
+            await fetch(`${API_URL}/cdr/logout`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sessionId: sessionData.sessionId
+                })
+            });
+        } catch (error) {
+            console.error('Error al cerrar sesión en backend:', error);
+        }
+    }
+    
+    // Limpiar sesión
+    sessionData = {
+        userid: '',
+        userpass: '',
+        sessionId: '',
+        isActive: false
+    };
+    
+    // Limpiar datos
+    allCalls = [];
+    filteredCalls = [];
+    selectedExtensions = [];
+    
+    // Destruir gráficos
+    if (dispositionChart) {
+        dispositionChart.destroy();
+        dispositionChart = null;
+    }
+    if (extensionChart) {
+        extensionChart.destroy();
+        extensionChart = null;
+    }
+    if (hourChart) {
+        hourChart.destroy();
+        hourChart = null;
+    }
+    if (topSourceChart) {
+        topSourceChart.destroy();
+        topSourceChart = null;
+    }
+    if (avgDurationChart) {
+        avgDurationChart.destroy();
+        avgDurationChart = null;
+    }
+    if (weekdayChart) {
+        weekdayChart.destroy();
+        weekdayChart = null;
+    }
+    
+    document.getElementById('step1').classList.remove('hidden');
+    document.getElementById('step2').classList.add('hidden');
+    document.getElementById('userid').value = '';
+    document.getElementById('userpass').value = '';
+    
+    // Ocultar dashboard y mostrar sección de upload
+    document.getElementById('uploadSection').classList.remove('hidden');
+    document.getElementById('dashboardContent').classList.add('hidden');
+    document.getElementById('quickQueryPanel').classList.add('hidden');
+    
+    showAlert('✓ Sesión cerrada correctamente', 'info');
+}
+
+// Mostrar alertas
+function showAlert(message, type) {
+    const alertMsg = document.getElementById('alertMsg');
+    alertMsg.textContent = message;
+    alertMsg.className = `alert ${type}`;
+    alertMsg.classList.remove('hidden');
+}
+
+// Formatear datos de CUAD al formato del dashboard
+function formatCUADData(data) {
+    const headers = ['cdr_id', 'calldate', 'clid', 'source', 'src', 'dst', 'destination', 
+                    'dcontext', 'channel', 'dstchannel', 'lastapp', 'lastdata', 
+                    'duration', 'billsec', 'disposition', 'amaflags'];
+    
+    const rows = data.rows.map(row => [
+        row.cdr_id,
+        row.calldate,
+        row.clid,
+        row.source,
+        row.src || row.source,
+        row.dst || row.destination,
+        row.destination,
+        row.dcontext,
+        row.channel,
+        row.dstchannel,
+        row.lastapp,
+        row.lastdata,
+        row.duration,
+        row.billsec,
+        row.disposition,
+        row.amaflags
+    ]);
+    
+    return [headers, ...rows];
+}
+
+// NOTA IMPORTANTE: Ahora usa la API backend
+async function consultaTelmex(userid, userpass, fromDate, toDate, source = '', destination = '') {
+    try {
+        const response = await fetch(`${API_URL}/cdr/query`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                userid: userid,
+                userpass: userpass,
+                from: fromDate,
+                to: toDate,
+                source: source,
+                destination: destination,
+                page_size: '999999'
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Error en la consulta');
+        }
+        
+        const result = await response.json();
+        
+        // Guardar sessionId para futuras consultas
+        if (result.sessionId) {
+            sessionData.sessionId = result.sessionId;
+        }
+        
+        return {
+            status: response.status,
+            data: result.data
+        };
+        
+    } catch (error) {
+        throw new Error('Error al conectar con la API: ' + error.message);
+    }
+}
+
+// Consultar usando sesión existente (más rápido)
+async function consultaTelmexRefresh(fromDate, toDate, source = '', destination = '') {
+    if (!sessionData.sessionId) {
+        throw new Error('No hay sesión activa');
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/cdr/refresh`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                sessionId: sessionData.sessionId,
+                from: fromDate,
+                to: toDate,
+                source: source,
+                destination: destination,
+                page_size: '999999'
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Error en la consulta');
+        }
+        
+        const result = await response.json();
+        
+        return {
+            status: response.status,
+            data: result.data
+        };
+        
+    } catch (error) {
+        throw new Error('Error al refrescar datos: ' + error.message);
+    }
+}

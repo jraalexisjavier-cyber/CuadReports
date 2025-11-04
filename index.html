@@ -15,16 +15,158 @@
         </div>
 
         <div class="upload-section" id="uploadSection">
-            <div class="upload-area" id="uploadArea">
-                <div class="upload-icon">📁</div>
-                <div class="upload-text">Arrastra tu archivo JSON aquí</div>
-                <div class="upload-hint">o haz clic para seleccionar el archivo</div>
-                <input type="file" id="fileInput" accept=".json">
+            <div class="upload-container">
+                <h2 style="color: #667eea; margin-bottom: 10px;">Conectar al Sistema CUAD Telmex</h2>
+                <p style="color: #666; margin-bottom: 25px;">Ingresa tus credenciales para consultar los CDR</p>
+                
+                <!-- Paso 1: Credenciales -->
+                <div id="step1" class="step-container">
+                    <form id="credentialsForm">
+                        <div class="form-group">
+                            <label>👤 Usuario CUAD</label>
+                            <input type="text" id="userid" placeholder="usuario.nombre" required>
+                        </div>
+                        <div class="form-group">
+                            <label>🔒 Contraseña</label>
+                            <input type="password" id="userpass" placeholder="contraseña" required>
+                        </div>
+                        <button type="submit" class="btn-primary" id="loginBtn">
+                            <span id="loginBtnText">🚀 Conectar y Cargar Datos</span>
+                            <span id="loginBtnLoader" class="hidden">⏳ Conectando...</span>
+                        </button>
+                        <p style="color: #888; font-size: 0.9em; margin-top: 15px;">
+                            Se cargarán automáticamente los CDR desde el día 1 del mes actual hasta hoy
+                        </p>
+                    </form>
+                </div>
+
+                <!-- Paso 2: Opciones de consulta (oculto inicialmente) -->
+                <div id="step2" class="step-container hidden">
+                    <div class="session-info">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>✓ Sesión activa:</strong> <span id="sessionUser"></span>
+                            </div>
+                            <button class="btn-secondary" id="logoutBtn">Cerrar Sesión</button>
+                        </div>
+                    </div>
+
+                    <h3 style="color: #333; margin: 25px 0 15px 0;">🔍 Nueva Consulta Personalizada</h3>
+                    
+                    <form id="customQueryForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>📅 Fecha/Hora Inicio</label>
+                                <input type="datetime-local" id="customFromDate" required>
+                            </div>
+                            <div class="form-group">
+                                <label>📅 Fecha/Hora Fin</label>
+                                <input type="datetime-local" id="customToDate" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>📞 Origen (opcional)</label>
+                                <input type="text" id="customSource" placeholder="Número origen">
+                            </div>
+                            <div class="form-group">
+                                <label>📱 Destino (opcional)</label>
+                                <input type="text" id="customDestination" placeholder="Extensión destino">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary" id="queryBtn">
+                            <span id="queryBtnText">🔄 Actualizar Consulta</span>
+                            <span id="queryBtnLoader" class="hidden">⏳ Consultando...</span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Opción alternativa: Cargar JSON -->
+                <div class="divider">
+                    <span>O</span>
+                </div>
+
+                <div class="upload-alternative">
+                    <h3 style="color: #333; margin-bottom: 15px;">📁 Cargar archivo JSON</h3>
+                    <div class="upload-area" id="uploadArea">
+                        <div class="upload-icon">📄</div>
+                        <div class="upload-text">Arrastra tu archivo JSON aquí</div>
+                        <div class="upload-hint">o haz clic para seleccionar</div>
+                        <input type="file" id="fileInput" accept=".json">
+                    </div>
+                    <div class="file-info hidden" id="fileInfo"></div>
+                </div>
+
+                <div class="alert hidden" id="alertMsg"></div>
             </div>
-            <div class="file-info hidden" id="fileInfo"></div>
         </div>
 
         <div id="dashboardContent" class="hidden">
+            <!-- Barra de control superior -->
+            <div class="dashboard-controls">
+                <div class="controls-left">
+                    <div class="user-info">
+                        <span class="user-badge">👤 <strong id="dashboardUser"></strong></span>
+                        <span class="records-count" id="recordsCount">0 registros</span>
+                    </div>
+                </div>
+                <div class="controls-right">
+                    <button class="btn-icon" id="btnNewQuery" title="Nueva consulta">
+                        🔍 Nueva Consulta
+                    </button>
+                    <button class="btn-icon btn-danger" id="btnLogout" title="Cerrar sesión">
+                        🚪 Cerrar Sesión
+                    </button>
+                </div>
+            </div>
+
+            <!-- Panel de consulta rápida (oculto por defecto) -->
+            <div class="quick-query-panel hidden" id="quickQueryPanel">
+                <div class="panel-header">
+                    <h3>🔍 Nueva Consulta de CDR</h3>
+                    <button class="btn-close" id="btnCloseQuery">×</button>
+                </div>
+                <form id="quickQueryForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>📅 Desde</label>
+                            <input type="datetime-local" id="quickFromDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label>📅 Hasta</label>
+                            <input type="datetime-local" id="quickToDate" required>
+                        </div>
+                    </div>
+                    
+                    <!-- Atajos de fecha -->
+                    <div class="date-shortcuts">
+                        <button type="button" class="btn-shortcut" data-range="today">Hoy</button>
+                        <button type="button" class="btn-shortcut" data-range="yesterday">Ayer</button>
+                        <button type="button" class="btn-shortcut" data-range="week">Esta Semana</button>
+                        <button type="button" class="btn-shortcut" data-range="month">Este Mes</button>
+                        <button type="button" class="btn-shortcut" data-range="last7">Últimos 7 días</button>
+                        <button type="button" class="btn-shortcut" data-range="last30">Últimos 30 días</button>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>📞 Origen (opcional)</label>
+                            <input type="text" id="quickSource" placeholder="Número origen">
+                        </div>
+                        <div class="form-group">
+                            <label>📱 Destino (opcional)</label>
+                            <input type="text" id="quickDestination" placeholder="Extensión destino">
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary" id="quickQueryBtn">
+                        <span id="quickQueryBtnText">🔄 Consultar</span>
+                        <span id="quickQueryBtnLoader" class="hidden">⏳ Consultando...</span>
+                    </button>
+                </form>
+                <div class="alert hidden" id="quickAlertMsg"></div>
+            </div>
+
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-label">Total Llamadas</div>
@@ -84,11 +226,6 @@
                 </div>
             </div>
 
-            <div class="chart-card chart-full-width">
-                <div class="chart-title">Llamadas por Hora del Día</div>
-                <canvas id="hourChart"></canvas>
-            </div>
-
             <div class="charts-grid">
                 <div class="chart-card">
                     <div class="chart-title">Distribución por Estado</div>
@@ -100,7 +237,113 @@
                 </div>
             </div>
 
-            
+            <div class="chart-card chart-full-width">
+                <div class="chart-title">Llamadas por Hora del Día</div>
+                <canvas id="hourChart"></canvas>
+            </div>
+
+            <!-- Nuevas Analíticas Avanzadas -->
+            <div class="analytics-section">
+                <h2 class="section-title">📊 Analíticas Avanzadas</h2>
+                
+                <div class="charts-grid">
+                    <!-- Tasa de Éxito -->
+                    <div class="chart-card">
+                        <div class="chart-title">📈 Tasa de Éxito de Llamadas</div>
+                        <div class="metric-container">
+                            <div class="metric-large">
+                                <span class="metric-value" id="successRate">0%</span>
+                                <span class="metric-label">Tasa de Éxito</span>
+                            </div>
+                            <div class="metrics-grid">
+                                <div class="metric-small success">
+                                    <span class="metric-value" id="answeredRate">0%</span>
+                                    <span class="metric-label">Contestadas</span>
+                                </div>
+                                <div class="metric-small warning">
+                                    <span class="metric-value" id="noAnswerRate">0%</span>
+                                    <span class="metric-label">No Contestadas</span>
+                                </div>
+                                <div class="metric-small danger">
+                                    <span class="metric-value" id="failedRate">0%</span>
+                                    <span class="metric-label">Fallidas</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top Números Origen -->
+                    <div class="chart-card">
+                        <div class="chart-title">📞 Top 10 Números Origen</div>
+                        <canvas id="topSourceChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <!-- Duración Promedio por Hora -->
+                    <div class="chart-card">
+                        <div class="chart-title">⏱️ Duración Promedio por Hora</div>
+                        <canvas id="avgDurationChart"></canvas>
+                    </div>
+
+                    <!-- Llamadas por Día de Semana -->
+                    <div class="chart-card">
+                        <div class="chart-title">📅 Llamadas por Día de la Semana</div>
+                        <canvas id="weekdayChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card chart-full-width">
+                    <div class="chart-title">🕒 Mapa de Calor - Llamadas por Día y Hora</div>
+                    <div id="heatmapContainer"></div>
+                </div>
+
+                <!-- Tabla de Top Destinos -->
+                <div class="chart-card chart-full-width">
+                    <div class="chart-title">🎯 Análisis por Extensión Destino</div>
+                    <div class="top-destinations-table">
+                        <table id="topDestinationsTable">
+                            <thead>
+                                <tr>
+                                    <th>Extensión</th>
+                                    <th>Total Llamadas</th>
+                                    <th>Contestadas</th>
+                                    <th>No Contestadas</th>
+                                    <th>Fallidas</th>
+                                    <th>Duración Total</th>
+                                    <th>Duración Promedio</th>
+                                    <th>Tasa de Éxito</th>
+                                </tr>
+                            </thead>
+                            <tbody id="topDestinationsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- KPIs Adicionales -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-icon">⏱️</div>
+                        <div class="kpi-value" id="avgCallDuration">0s</div>
+                        <div class="kpi-label">Duración Promedio</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">🕐</div>
+                        <div class="kpi-value" id="peakHour">-</div>
+                        <div class="kpi-label">Hora Pico</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">📊</div>
+                        <div class="kpi-value" id="busyExtension">-</div>
+                        <div class="kpi-label">Ext. Más Ocupada</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">⚡</div>
+                        <div class="kpi-value" id="avgWaitTime">0s</div>
+                        <div class="kpi-label">Tiempo Espera Prom.</div>
+                    </div>
+                </div>
+            </div>
 
             <div class="table-container">
                 <h3 style="color: #333; margin-bottom: 20px;">📋 Detalle de Llamadas</h3>
